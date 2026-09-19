@@ -1,4 +1,8 @@
+use std::cmp::Ordering;
+
 use rustfft::FftPlanner;
+use rustfft::num_complex::Complex;
+use rustfft::num_traits::Zero;
 
 use crate::utils::buffer::ComplexComponent;
 use crate::utils::buffer::{copy_complex_to_real, square_sum};
@@ -77,10 +81,18 @@ pub fn pitch_from_peaks<T>(
 where
     T: Float,
 {
+    let pick_threshold: T = <T as rustfft::num_traits::NumCast>::from(0.98_f64).unwrap();
     let sample_rate = T::from_usize(sample_rate).unwrap();
     let peaks = detect_peaks(input);
 
-    choose_peak(peaks, clarity_threshold)
+    let peaks2 = detect_peaks(input);
+    let maxpeak = peaks2.max_by(|x, y| x.1.partial_cmp(&y.1).unwrap_or_else(|| Ordering::Equal));
+    let thresh2 = match maxpeak {
+        None => T::from(0).unwrap(),
+        Some(p) => p.1 * pick_threshold,
+    };
+
+    choose_peak(peaks, clarity_threshold, thresh2)
         .map(|peak| correct_peak(peak, input, correction))
         .map(|peak| Pitch {
             frequency: sample_rate / peak.0,

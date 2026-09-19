@@ -65,7 +65,7 @@ pub fn copy_complex_to_real<T: Float>(
 /// Computes |x|^2 for each complex value x in `arr`. This function
 /// modifies `arr` in place and leaves the complex component zero.
 pub fn modulus_squared<'a, T: Float>(arr: &'a mut [Complex<T>]) {
-    for mut s in arr {
+    for s in arr {
         s.re = s.re * s.re + s.im * s.im;
         s.im = T::zero();
     }
