@@ -56,13 +56,18 @@ pub fn autocorrelation<T>(signal: &[T], buffers: &mut BufferPool<T>, result: &mu
 where
     T: Float,
 {
-    let (ref1, ref2) = (buffers.get_complex_buffer(), buffers.get_complex_buffer());
+    let ref1 = buffers.get_complex_buffer();
     let signal_complex = &mut ref1.borrow_mut()[..];
-    let scratch = &mut ref2.borrow_mut()[..];
 
     let mut planner = FftPlanner::new();
     let fft = planner.plan_fft_forward(signal_complex.len());
     let inv_fft = planner.plan_fft_inverse(signal_complex.len());
+
+    // RustFFT may require more scratch space than the FFT length itself
+    // (e.g. when Bluestein's algorithm is used), so size the scratch buffer
+    // from the plan rather than reusing a pooled buffer.
+    let scratch_len = fft.get_inplace_scratch_len().max(inv_fft.get_inplace_scratch_len());
+    let scratch = &mut vec![Complex::zero(); scratch_len];
 
     // Compute the autocorrelation
     copy_real_to_complex(signal, signal_complex, ComplexComponent::Re);
@@ -162,15 +167,18 @@ pub fn windowed_autocorrelation<T>(
     let fft = planner.plan_fft_forward(signal.len());
     let inv_fft = planner.plan_fft_inverse(signal.len());
 
-    let (scratch_ref1, scratch_ref2, scratch_ref3) = (
-        buffers.get_complex_buffer(),
+    let (scratch_ref1, scratch_ref2) = (
         buffers.get_complex_buffer(),
         buffers.get_complex_buffer(),
     );
 
     let signal_complex = &mut scratch_ref1.borrow_mut()[..signal.len()];
     let truncated_signal_complex = &mut scratch_ref2.borrow_mut()[..signal.len()];
-    let scratch = &mut scratch_ref3.borrow_mut()[..signal.len()];
+    // RustFFT may require more scratch space than the FFT length itself
+    // (e.g. when Bluestein's algorithm is used), so size the scratch buffer
+    // from the plan rather than reusing a pooled buffer.
+    let scratch_len = fft.get_inplace_scratch_len().max(inv_fft.get_inplace_scratch_len());
+    let scratch = &mut vec![Complex::zero(); scratch_len];
 
     // To achieve the windowed autocorrelation, we compute the cross correlation between
     // the original signal and the signal truncated to lie in `0..window_size`
